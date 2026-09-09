@@ -1,0 +1,266 @@
+{% extends 'base.html' %}
+
+{% block title %}Analytics{% endblock %}
+
+{% block extra_css %}
+<style>
+    .mini-legend-swatch {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        display: inline-block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="hero-section animate-fade-in mb-4">
+    <div class="hero-content">
+        <h1 class="hero-title">
+            <i class="fas fa-chart-line me-2"></i><span data-i18n="page.analytics">Waste & Cleanliness Analytics</span>
+        </h1>
+        <p class="hero-subtitle" data-i18n="page.analyticsSub">Track daily collection, segregation, area coverage, and vehicle/bin load in real time</p>
+    </div>
+</div>
+
+<!-- Stats Overview -->
+<div class="stats-grid mb-4">
+    <div class="stat-card animate-fade-in" style="animation-delay: 0.1s">
+        <div class="stat-icon blue">
+            <i class="fas fa-weight-hanging"></i>
+        </div>
+        <div class="stat-value">{{ latest['total_waste_kg'] if latest else 0 }}</div>
+        <div class="stat-label" data-i18n="stat.totalCollected">Total Waste Collected (kg)</div>
+    </div>
+
+    <div class="stat-card animate-fade-in" style="animation-delay: 0.2s">
+        <div class="stat-icon orange">
+            <i class="fas fa-leaf"></i>
+        </div>
+        <div class="stat-value">{{ latest['dry_waste_kg'] if latest else 0 }}</div>
+        <div class="stat-label" data-i18n="stat.dryWaste">Dry Waste (kg)</div>
+    </div>
+
+    <div class="stat-card animate-fade-in" style="animation-delay: 0.3s">
+        <div class="stat-icon blue">
+            <i class="fas fa-tint"></i>
+        </div>
+        <div class="stat-value">{{ latest['wet_waste_kg'] if latest else 0 }}</div>
+        <div class="stat-label" data-i18n="stat.wetWaste">Wet Waste (kg)</div>
+    </div>
+
+    <div class="stat-card animate-fade-in" style="animation-delay: 0.4s">
+        <div class="stat-icon green">
+            <i class="fas fa-plug"></i>
+        </div>
+        <div class="stat-value">{{ latest['ewaste_kg'] if latest else 0 }}</div>
+        <div class="stat-label" data-i18n="stat.ewaste">E-Waste (kg)</div>
+    </div>
+
+    <div class="stat-card animate-fade-in" style="animation-delay: 0.5s">
+        <div class="stat-icon orange">
+            <i class="fas fa-map-location-dot"></i>
+        </div>
+        <div class="stat-value">{{ latest['area_covered_pct'] if latest else 0 }}%</div>
+        <div class="stat-label" data-i18n="stat.avgCoverage">Area Covered Today</div>
+    </div>
+
+    <div class="stat-card animate-fade-in" style="animation-delay: 0.6s">
+        <div class="stat-icon red">
+            <i class="fas fa-trash-can"></i>
+        </div>
+        <div class="stat-value">{{ avg_bin_fill }}%</div>
+        <div class="stat-label" data-i18n="stat.avgBinFill">Average Bin Fill</div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Daily Waste Trend -->
+    <div class="col-lg-8">
+        <div class="analytics-chart-card animate-fade-in" style="animation-delay: 0.1s">
+            <h5 class="card-title mb-3">
+                <i class="fas fa-chart-bar"></i> <span data-i18n="card.dailyTrend">Waste Collected Per Day (kg)</span>
+            </h5>
+            <canvas id="dailyTrendChart"></canvas>
+        </div>
+
+        <div class="analytics-chart-card animate-fade-in" style="animation-delay: 0.2s">
+            <h5 class="card-title mb-3">
+                <i class="fas fa-map-location-dot"></i> <span data-i18n="card.coverage">Area Coverage Trend</span>
+            </h5>
+            <canvas id="coverageChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Segregation Breakdown -->
+    <div class="col-lg-4">
+        <div class="analytics-chart-card animate-fade-in" style="animation-delay: 0.15s">
+            <h5 class="card-title mb-3">
+                <i class="fas fa-recycle"></i> <span data-i18n="card.segregation">Waste Segregation Breakdown</span>
+            </h5>
+            <canvas id="segregationChart"></canvas>
+            <div class="segregation-legend">
+                <div class="segregation-legend-item"><span class="segregation-dot" style="background:#CFBB99;"></span> <span data-i18n="waste.dry">Dry</span>: {{ total_dry }} kg</div>
+                <div class="segregation-legend-item"><span class="segregation-dot" style="background:#889063;"></span> <span data-i18n="waste.wet">Wet</span>: {{ total_wet }} kg</div>
+                <div class="segregation-legend-item"><span class="segregation-dot" style="background:#4C3D19;"></span> <span data-i18n="waste.ewaste">E-Waste</span>: {{ total_ewaste }} kg</div>
+            </div>
+        </div>
+
+        <!-- Bin Fill Status -->
+        <div class="card animate-fade-in" style="animation-delay: 0.25s">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="fas fa-trash-can"></i> <span data-i18n="card.binLevels">Bin Fill Status (kg)</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                {% for b in bins %}
+                <div class="vehicle-load-item">
+                    <div class="fill-bar-label">
+                        <span>{{ b['location'] }}</span>
+                        <span>{{ b['current_kg'] }}/{{ b['capacity_kg'] }} kg</span>
+                    </div>
+                    <div class="fill-bar-track">
+                        <div class="fill-bar-fill {{ 'danger' if b['fill_pct'] >= 80 else 'warning' if b['fill_pct'] >= 50 else '' }}" style="width: {{ b['fill_pct'] }}%;"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vehicle Waste Load -->
+<div class="card mt-2 animate-fade-in" style="animation-delay: 0.3s">
+    <div class="card-header">
+        <h5 class="card-title">
+            <i class="fas fa-truck-loading"></i> <span data-i18n="card.vehicleLoads">Vehicle Waste Load</span>
+        </h5>
+    </div>
+    <div class="card-body">
+        {% for v in vehicles %}
+        <div class="vehicle-load-item">
+            <div class="vehicle-load-header">
+                <span><i class="fas fa-truck me-1 text-primary"></i>{{ v['name'] }} — {{ v['driver'] }}</span>
+                <span class="status-pill {{ 'cleaning' if v['status'] == 'Cleaning' else '' }}">{{ v['status'] }}</span>
+            </div>
+            <div class="fill-bar-label">
+                <span>{{ v['current_load_kg'] }} / {{ v['capacity_kg'] }} kg</span>
+                <span>{{ v['load_pct'] }}%</span>
+            </div>
+            <div class="fill-bar-track">
+                <div class="fill-bar-fill {{ 'danger' if v['load_pct'] >= 80 else 'warning' if v['load_pct'] >= 50 else '' }}" style="width: {{ v['load_pct'] }}%;"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+(function () {
+    function tt(key, fallback) {
+        try {
+            var lang = (window.SSI18N && window.SSI18N.currentLang()) || 'en';
+            var dict = window.SSI18N ? window.SSI18N.dict[lang] : null;
+            return (dict && dict[key]) || fallback;
+        } catch (e) {
+            return fallback;
+        }
+    }
+
+    var charts = {};
+
+    function destroyAll() {
+        Object.values(charts).forEach(function (c) { if (c) c.destroy(); });
+    }
+
+    function renderCharts(data) {
+        destroyAll();
+
+        var primary = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim() || '#354024';
+
+        // Daily waste trend (stacked bar)
+        var ctx1 = document.getElementById('dailyTrendChart').getContext('2d');
+        charts.trend = new Chart(ctx1, {
+            type: 'bar',
+            data: {
+                labels: data.labels,
+                datasets: [
+                    { label: tt('waste.dry', 'Dry'), data: data.dry_waste_kg, backgroundColor: '#CFBB99' },
+                    { label: tt('waste.wet', 'Wet'), data: data.wet_waste_kg, backgroundColor: '#889063' },
+                    { label: tt('waste.ewaste', 'E-Waste'), data: data.ewaste_kg, backgroundColor: '#4C3D19' }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom' } },
+                scales: {
+                    x: { stacked: true },
+                    y: { stacked: true, beginAtZero: true, title: { display: true, text: 'kg' } }
+                }
+            }
+        });
+
+        // Area coverage trend (line)
+        var ctx2 = document.getElementById('coverageChart').getContext('2d');
+        charts.coverage = new Chart(ctx2, {
+            type: 'line',
+            data: {
+                labels: data.labels,
+                datasets: [{
+                    label: '%',
+                    data: data.area_covered_pct,
+                    borderColor: primary,
+                    backgroundColor: 'rgba(13, 148, 136, 0.15)',
+                    fill: true,
+                    tension: 0.35
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, max: 100, title: { display: true, text: '%' } } }
+            }
+        });
+
+        // Segregation breakdown (doughnut) - all-time totals
+        var ctx3 = document.getElementById('segregationChart').getContext('2d');
+        var totalDry = data.dry_waste_kg.reduce(function (a, b) { return a + b; }, 0);
+        var totalWet = data.wet_waste_kg.reduce(function (a, b) { return a + b; }, 0);
+        var totalEwaste = data.ewaste_kg.reduce(function (a, b) { return a + b; }, 0);
+        charts.segregation = new Chart(ctx3, {
+            type: 'doughnut',
+            data: {
+                labels: [tt('waste.dry', 'Dry'), tt('waste.wet', 'Wet'), tt('waste.ewaste', 'E-Waste')],
+                datasets: [{
+                    data: [totalDry.toFixed(1), totalWet.toFixed(1), totalEwaste.toFixed(1)],
+                    backgroundColor: ['#CFBB99', '#889063', '#4C3D19'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+    fetch('/api/analytics')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            renderCharts(data);
+            // Re-render with translated legend labels whenever the language changes
+            document.querySelectorAll('.lang-select').forEach(function (sel) {
+                sel.addEventListener('change', function () {
+                    setTimeout(function () { renderCharts(data); }, 0);
+                });
+            });
+        })
+        .catch(function (err) { console.error('Error loading analytics:', err); });
+})();
+</script>
+{% endblock %}

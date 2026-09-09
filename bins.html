@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+
+{% block title %}Bin Management{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="hero-section animate-fade-in mb-4">
+    <div class="hero-content">
+        <h1 class="hero-title">
+            <i class="fas fa-trash-can me-2"></i><span data-i18n="page.binManagement">Bin Management</span>
+        </h1>
+        <p class="hero-subtitle" data-i18n="page.binManagementSub">Monitor and update bin status, waste quantity and segregation across all locations</p>
+    </div>
+</div>
+
+<!-- Stats Overview -->
+<div class="stats-grid mb-4">
+    <div class="stat-card animate-fade-in" style="animation-delay: 0.1s">
+        <div class="stat-icon green">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        <div class="stat-value">{{ bins|selectattr('level', 'equalto', 'Empty')|list|length }}</div>
+        <div class="stat-label" data-i18n="stat.emptyBins">Empty Bins</div>
+    </div>
+    
+    <div class="stat-card animate-fade-in" style="animation-delay: 0.2s">
+        <div class="stat-icon orange">
+            <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="stat-value">{{ bins|selectattr('level', 'equalto', 'Half')|list|length }}</div>
+        <div class="stat-label" data-i18n="stat.halfFull">Half Full</div>
+    </div>
+    
+    <div class="stat-card animate-fade-in" style="animation-delay: 0.3s">
+        <div class="stat-icon red">
+            <i class="fas fa-bell"></i>
+        </div>
+        <div class="stat-value">{{ bins|selectattr('level', 'equalto', 'Full')|list|length }}</div>
+        <div class="stat-label" data-i18n="stat.fullBins">Full Bins</div>
+    </div>
+    
+    <div class="stat-card animate-fade-in" style="animation-delay: 0.4s">
+        <div class="stat-icon blue">
+            <i class="fas fa-trash-can"></i>
+        </div>
+        <div class="stat-value">{{ bins|length }}</div>
+        <div class="stat-label" data-i18n="stat.totalBins">Total Bins</div>
+    </div>
+</div>
+
+<!-- Bins Table -->
+<div class="card animate-fade-in" style="animation-delay: 0.2s">
+    <div class="card-header">
+        <h5 class="card-title">
+            <i class="fas fa-list"></i> <span data-i18n="card.allBins">All Bins</span>
+        </h5>
+        <a href="/map" class="btn btn-sm btn-outline">
+            <i class="fas fa-map me-1"></i> <span data-i18n="btn.viewOnMap">View on Map</span>
+        </a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-container">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th><i class="fas fa-map-marker-alt me-1"></i> <span data-i18n="th.location">Location</span></th>
+                        <th><i class="fas fa-signal me-1"></i> <span data-i18n="th.status">Status</span></th>
+                        <th><i class="fas fa-weight-hanging me-1"></i> <span data-i18n="th.fillLevel">Fill Level (kg)</span></th>
+                        <th><i class="fas fa-recycle me-1"></i> <span data-i18n="th.wasteType">Waste Type</span></th>
+                        <th><i class="fas fa-clock me-1"></i> <span data-i18n="th.lastUpdate">Last Update</span></th>
+                        <th><i class="fas fa-cog me-1"></i> <span data-i18n="th.action">Action</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in bins %}
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="bin-icon {{ b['level']|lower }}">
+                                    <i class="fas fa-trash"></i>
+                                </div>
+                                <span class="fw-semibold">{{ b['location'] }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge badge-{{ 'success' if b['level']=='Empty' else 'warning' if b['level']=='Half' else 'danger' }}">
+                                <i class="fas fa-{{ 'check' if b['level']=='Empty' else 'exclamation' if b['level']=='Half' else 'bell' }} me-1"></i>
+                                {{ b['level'] }}
+                            </span>
+                        </td>
+                        <td style="min-width: 160px;">
+                            <div class="fill-bar-label">
+                                <span>{{ b['current_kg'] }} / {{ b['capacity_kg'] }} kg</span>
+                                <span>{{ b['fill_pct'] }}%</span>
+                            </div>
+                            <div class="fill-bar-track">
+                                <div class="fill-bar-fill {{ 'danger' if b['fill_pct'] >= 80 else 'warning' if b['fill_pct'] >= 50 else '' }}" style="width: {{ b['fill_pct'] }}%;"></div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge-waste {{ b['waste_type']|lower|replace(' ', '-') }}">
+                                <i class="fas fa-{{ 'leaf' if b['waste_type']=='Dry' else 'tint' if b['waste_type']=='Wet' else 'plug' if b['waste_type']=='E-Waste' else 'layer-group' }}"></i>
+                                <span data-i18n="waste.{{ 'dry' if b['waste_type']=='Dry' else 'wet' if b['waste_type']=='Wet' else 'ewaste' if b['waste_type']=='E-Waste' else 'mixed' }}">{{ b['waste_type'] }}</span>
+                            </span>
+                        </td>
+                        <td>
+                            <span class="text-muted">
+                                <i class="far fa-clock me-1"></i>{{ b['last_update'] }}
+                            </span>
+                        </td>
+                        <td>
+                            <form method="post" action="/bins/update" class="d-flex flex-wrap gap-2 align-items-center" style="min-width: 320px;">
+                                <input type="hidden" name="bin_id" value="{{ b['id'] }}">
+                                <select name="level" class="form-select form-select-sm" style="width: 110px;">
+                                    <option value="Empty" {% if b['level'] == 'Empty' %}selected{% endif %}>Empty</option>
+                                    <option value="Half" {% if b['level'] == 'Half' %}selected{% endif %}>Half</option>
+                                    <option value="Full" {% if b['level'] == 'Full' %}selected{% endif %}>Full</option>
+                                </select>
+                                <input type="number" step="0.1" min="0" name="current_kg" class="form-control form-control-sm" style="width: 90px;" value="{{ b['current_kg'] }}" title="Current kg">
+                                <select name="waste_type" class="form-select form-select-sm" style="width: 110px;">
+                                    <option value="Mixed" {% if b['waste_type'] == 'Mixed' %}selected{% endif %}>Mixed</option>
+                                    <option value="Dry" {% if b['waste_type'] == 'Dry' %}selected{% endif %}>Dry</option>
+                                    <option value="Wet" {% if b['waste_type'] == 'Wet' %}selected{% endif %}>Wet</option>
+                                    <option value="E-Waste" {% if b['waste_type'] == 'E-Waste' %}selected{% endif %}>E-Waste</option>
+                                </select>
+                                <button type="submit" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-save"></i> <span data-i18n="btn.update">Update</span>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Legend -->
+<div class="card mt-4 animate-fade-in" style="animation-delay: 0.3s">
+    <div class="card-body">
+        <h6 class="mb-3"><i class="fas fa-info-circle me-2 text-primary"></i><span data-i18n="legend.title">Status Legend</span></h6>
+        <div class="row">
+            <div class="col-md-4">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="badge badge-success">Empty</span>
+                    <span class="text-muted small" data-i18n="legend.empty">Bin is empty and ready for use</span>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="badge badge-warning">Half</span>
+                    <span class="text-muted small" data-i18n="legend.half">Bin is partially filled</span>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="badge badge-danger">Full</span>
+                    <span class="text-muted small" data-i18n="legend.full">Bin needs immediate emptying</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
